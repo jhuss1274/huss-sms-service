@@ -137,8 +137,7 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
     
     summary = raw_intake_text if raw_intake_text else "No transcript available."
 
-        recommended_route = "Jeremy"
-    
+    recommended_route = "Jeremy"    
     fields_to_write = {
         "Status": "Processed",
         "Notes": "V12.5_Zap3",
