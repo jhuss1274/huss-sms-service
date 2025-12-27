@@ -138,27 +138,16 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
     summary = raw_intake_text if raw_intake_text else "No transcript available."
 
     recommended_route = "Jeremy"    
+    notes_blob = (
+        "V12.5_Zap3\n"
+        f"Summary: {summary}\n"
+        f"Category: {category}\n"
+        f"Urgency: {urgency}\n"
+        f"Missing: {', '.join(missing) if isinstance(missing, list) else str(missing)}\n"
+        f"Route: {recommended_route}\n"
+    )
+    
     fields_to_write = {
         "Status": "Processed",
-        "Notes": "V12.5_Zap3",
-        "Summary": summary,
-        "Category": category,
-        "Urgency": urgency,
-        "Missing_Info_List": ", ".join(missing) if isinstance(missing, list) else str(missing),
-        "Recommended_Route": recommended_route,
+        "Notes": notes_blob,
     }
-    _airtable_patch(record_id, fields_to_write)
-
-    
-    return {
-        "ok": True,
-        "engine_version": "12.5",
-        "airtable_record_id": airtable_record_id,
-        "caller_phone_e164": caller_phone_e164,
-        "timestamp_phx": timestamp_phx,
-        "source": source,
-        "summary": summary,
-        "category": category,
-        "urgency": urgency,
-        "missing_info_list": missing,
-        "recommended_route": recommended_route    }
