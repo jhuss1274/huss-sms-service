@@ -1,12 +1,48 @@
-import os
+import os, json, urllib.request, urllib.error
 import re
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel, Field
 from twilio.rest import Client
 
 app = FastAPI(title="Huss SMS Service", version="1.0.0")
+
+AIRTABLE_PAT = os.getenv("AIRTABLE_PAT", "")
+AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID", "")
+AIRTABLE_TABLE_ID = os.getenv("AIRTABLE_TABLE_ID", "")
+HUSS_SECRET = os.getenv("HUSS_SECRET", "")
+
+def _check_secret(body_secret: str, header_secret: str):
+    expected = (HUSS_SECRET or "").strip()
+    provided = (body_secret or "").strip() or (header_secret or "").strip()
+    if expected and provided != expected:
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+def _airtable_patch(record_id: str, fields: dict):
+    if not AIRTABLE_PAT or not AIRTABLE_BASE_ID or not AIRTABLE_TABLE_ID:
+        raise HTTPException(status_code=500, detail="Missing Airtable env vars")
+
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}/{record_id}"
+    body = json.dumps({"fields": fields}).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="PATCH",
+        headers={
+            "Authorization": f"Bearer {AIRTABLE_PAT}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            _ = resp.read()
+    except urllib.error.HTTPError as e:
+        raise HTTPException(status_code=502, detail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8")})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
@@ -69,14 +105,12 @@ def send_intake_sms(payload: SendSmsRequest):
 
 
 @app.post("/intake_process")
-def intake_process(payload: dict):
-    # Check for secret in header or body
-    from fastapi import Request
-    secret = payload.get("secret", "")
+async def intake_process(payload: dict, x_huss_secret: str = Header(default="")):    # Check for secret in header or body
+    _check_secret(payload.get("secret", ""), x_huss_secret)
     
-    if not WEBHOOK_SECRET or secret != WEBHOOK_SECRET:
-        raise HTTPException(status_code=401, detail="unauthorized")
-    
+    record_id = (payload.get("airtable_record_id") or "").strip()
+    if not record_id:
+        raise HTTPException(status_code=400, detail="missing airtable_record_id")
     # Extract fields
     airtable_record_id = payload.get("airtable_record_id", "")
     caller_phone_e164 = payload.get("caller_phone_e164", "")
@@ -102,6 +136,20 @@ def intake_process(payload: dict):
         missing.append("incident location (city/state)")
     
     summary = raw_intake_text if raw_intake_text else "No transcript available."
+
+        recommended_route = "Jeremy"
+    
+    fields_to_write = {
+        "Status": "Processed",
+        "Notes": "V12.5_Zap3",
+        "Summary": summary,
+        "Category": category,
+        "Urgency": urgency,
+        "Missing_Info_List": ", ".join(missing) if isinstance(missing, list) else str(missing),
+        "Recommended_Route": recommended_route,
+    }
+    _airtable_patch(record_id, fields_to_write)
+
     
     return {
         "ok": True,
@@ -114,5 +162,4 @@ def intake_process(payload: dict):
         "category": category,
         "urgency": urgency,
         "missing_info_list": missing,
-        "recommended_route": "Jeremy"
-    }
+        "recommended_route": recommended_route    }
