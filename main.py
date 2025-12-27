@@ -65,3 +65,54 @@ def send_intake_sms(payload: SendSmsRequest):
         return {"twilio_sid": msg.sid, "event_id": payload.event_id}
     except Exception as e:
         raise HTTPException(status_code=502, detail="Twilio send failed.")
+
+
+
+@app.post("/intake_process")
+def intake_process(payload: dict):
+    # Check for secret in header or body
+    from fastapi import Request
+    secret = payload.get("secret", "")
+    
+    if not WEBHOOK_SECRET or secret != WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    
+    # Extract fields
+    airtable_record_id = payload.get("airtable_record_id", "")
+    caller_phone_e164 = payload.get("caller_phone_e164", "")
+    raw_intake_text = (payload.get("raw_intake_text") or "").strip()
+    timestamp_phx = payload.get("timestamp_phx", "")
+    source = payload.get("source", "")
+    
+    # Minimal deterministic processor
+    lower = raw_intake_text.lower()
+    urgency = "Medium"
+    if any(k in lower for k in ["jail", "custody", "arrest", "warrant", "court tomorrow", "today"]):
+        urgency = "High"
+    if raw_intake_text == "" or raw_intake_text == "NO_TRANSCRIPT_AVAILABLE_YET":
+        urgency = "Low"
+    
+    category = "Lead"
+    missing = []
+    if raw_intake_text == "" or raw_intake_text == "NO_TRANSCRIPT_AVAILABLE_YET":
+        missing.append("voicemail transcript / reason for call")
+    if "court" not in lower:
+        missing.append("court date (if any)")
+    if not any(city in lower for city in ["phoenix", "tempe", "mesa", "scottsdale", "chandler", "gilbert"]):
+        missing.append("incident location (city/state)")
+    
+    summary = raw_intake_text if raw_intake_text else "No transcript available."
+    
+    return {
+        "ok": True,
+        "engine_version": "12.5",
+        "airtable_record_id": airtable_record_id,
+        "caller_phone_e164": caller_phone_e164,
+        "timestamp_phx": timestamp_phx,
+        "source": source,
+        "summary": summary,
+        "category": category,
+        "urgency": urgency,
+        "missing_info_list": missing,
+        "recommended_route": "Jeremy"
+    }
