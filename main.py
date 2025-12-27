@@ -26,7 +26,7 @@ def _airtable_patch(record_id: str, fields: dict):
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}/{record_id}"
     body = json.dumps({"fields": fields}).encode("utf-8")
 
-        pat = (AIRTABLE_PAT or "")
+    pat = (AIRTABLE_PAT or "")
     pat_len = len(pat)
     pat_preview = pat[:3] + "..." + pat[-3:] if pat_len >= 7 else "(too_short)"
 
