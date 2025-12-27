@@ -22,14 +22,10 @@ def _check_secret(body_secret: str, header_secret: str):
 def _airtable_patch(record_id: str, fields: dict):
     if not AIRTABLE_PAT or not AIRTABLE_BASE_ID or not AIRTABLE_TABLE_ID:
         raise HTTPException(status_code=500, detail="Missing Airtable env vars")
-
+    
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}/{record_id}"
     body = json.dumps({"fields": fields}).encode("utf-8")
-
-    pat = (AIRTABLE_PAT or "")
-    pat_len = len(pat)
-    pat_preview = pat[:3] + "..." + pat[-3:] if pat_len >= 7 else "(too_short)"
-
+    
     req = urllib.request.Request(
         url,
         data=body,
@@ -39,15 +35,11 @@ def _airtable_patch(record_id: str, fields: dict):
             "Content-Type": "application/json",
         },
     )
-
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-        result["_debug_pat_len"] = pat_len
-        result["_debug_pat_preview"] = pat_preview
-        return result
+            return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        raise HTTPException(status_code=502, result = jsodetail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8"), "pat_len": pat_len, "pat_preview": pat_preview}n.loads(resp.read().decode("utf-8"))         result["_debug_pat_len"] = pat_len         result["_debug_pat_preview"] = pat_preview         return result)
+        raise HTTPException(status_code=502, detail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8")})
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -55,11 +47,8 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "").strip()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
-
 _client: Optional[Client] = None
-
 E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
-
 
 class SendSmsRequest(BaseModel):
     phone_e164: str = Field(..., description="Recipient phone number in E.164 format")
@@ -67,11 +56,9 @@ class SendSmsRequest(BaseModel):
     secret: str = Field(..., min_length=8)
     event_id: Optional[str] = None
 
-
 class SendSmsResponse(BaseModel):
     twilio_sid: str
     event_id: Optional[str] = None
-
 
 def get_client() -> Client:
     global _client
@@ -81,23 +68,18 @@ def get_client() -> Client:
         _client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     return _client
 
-
 @app.get("/health")
 def health():
     return {"ok": True}
-
 
 @app.post("/send-intake-sms", response_model=SendSmsResponse)
 def send_intake_sms(payload: SendSmsRequest):
     if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_MESSAGING_SERVICE_SID and WEBHOOK_SECRET):
         raise HTTPException(status_code=500, detail="Server misconfigured.")
-
     if payload.secret != WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized.")
-
     if not E164_RE.match(payload.phone_e164):
         raise HTTPException(status_code=400, detail="Invalid phone format.")
-
     try:
         client = get_client()
         msg = client.messages.create(
@@ -109,15 +91,14 @@ def send_intake_sms(payload: SendSmsRequest):
     except Exception as e:
         raise HTTPException(status_code=502, detail="Twilio send failed.")
 
-
-
 @app.post("/intake_process")
-async def intake_process(payload: dict, x_huss_secret: str = Header(default="")):    # Check for secret in header or body
+async def intake_process(payload: dict, x_huss_secret: str = Header(default="")):  # Check for secret in header or body
     _check_secret(payload.get("secret", ""), x_huss_secret)
     
     record_id = (payload.get("airtable_record_id") or "").strip()
     if not record_id:
         raise HTTPException(status_code=400, detail="missing airtable_record_id")
+    
     # Extract fields
     airtable_record_id = payload.get("airtable_record_id", "")
     caller_phone_e164 = payload.get("caller_phone_e164", "")
@@ -143,8 +124,7 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
         missing.append("incident location (city/state)")
     
     summary = raw_intake_text if raw_intake_text else "No transcript available."
-
-    recommended_route = "Jeremy"    
+    recommended_route = "Jeremy" 
     notes_blob = (
         "V12.5_Zap3\n"
         f"Summary: {summary}\n"
@@ -158,10 +138,7 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
         "Status": "Processed",
         "Notes": notes_blob,
     }
-
-
     airtable_result = _airtable_patch(record_id, fields_to_write)
-
     return {
         "summary": summary,
         "category": category,
