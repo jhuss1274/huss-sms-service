@@ -26,6 +26,11 @@ def _airtable_patch(record_id: str, fields: dict):
     url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}/{record_id}"
     body = json.dumps({"fields": fields}).encode("utf-8")
     
+    # Safe PAT debugging
+    pat = (AIRTABLE_PAT or "")
+    pat_len = len(pat)
+    pat_preview = pat[:3] + "..." + pat[-3:] if pat_len >= 7 else "(too_short)"
+    
     req = urllib.request.Request(
         url,
         data=body,
@@ -37,9 +42,12 @@ def _airtable_patch(record_id: str, fields: dict):
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            result = json.loads(resp.read().decode("utf-8"))
+            result["_debug_pat_len"] = pat_len
+            result["_debug_pat_preview"] = pat_preview
+            return result
     except urllib.error.HTTPError as e:
-        raise HTTPException(status_code=502, detail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8")})
+        raise HTTPException(status_code=502, detail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8"), "pat_len": pat_len, "pat_preview": pat_preview})
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -79,7 +87,7 @@ def send_intake_sms(payload: SendSmsRequest):
     if payload.secret != WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized.")
     if not E164_RE.match(payload.phone_e164):
-        raise HTTPException(status_code=400, detail="Invalid phone format.")
+        raise HTTPException(status_code=400, detail="Invalid phone format.")  
     try:
         client = get_client()
         msg = client.messages.create(
