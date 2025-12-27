@@ -38,7 +38,7 @@ def _airtable_patch(record_id: str, fields: dict):
 
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
-            _ = resp.read()
+            return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         raise HTTPException(status_code=502, detail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8")})
     except Exception as e:
@@ -150,4 +150,17 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
     fields_to_write = {
         "Status": "Processed",
         "Notes": notes_blob,
+    }
+
+
+    airtable_result = _airtable_patch(record_id, fields_to_write)
+
+    return {
+        "summary": summary,
+        "category": category,
+        "urgency": urgency,
+        "missing_info_list": missing,
+        "recommended_route": recommended_route,
+        "debug_record_id": record_id,
+        "debug_airtable_result": airtable_result
     }
