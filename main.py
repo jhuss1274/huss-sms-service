@@ -47,11 +47,17 @@ def _airtable_patch(record_id: str, fields: dict):
             result["_debug_pat_preview"] = pat_preview
             return result
     except urllib.error.HTTPError as e:
-        raise HTTPException(status_code=502, detail={"airtable_status": e.code, "airtable_body": e.read().decode("utf-8"), "pat_len": pat_len, "pat_preview": pat_preview})
-    except Exception as e:
+        raise HTTPException(
+                        status_code=502,
+                        detail={
+                                            "error": "AIRTABLE_HTTP_ERROR",
+                                            "airtable_status": e.code,
+                                            "airtable_body": e.read().decode("utf-8"),
+                                            "pat_len": pat_len,
+                                            "pat_preview": pat_preview,
+                                        },
+                    )except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
-
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "").strip()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
@@ -155,4 +161,6 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
         "recommended_route": recommended_route,
         "debug_record_id": record_id,
         "debug_airtable_result": airtable_result
+                "debug_pat_len": len(AIRTABLE_PAT or ""),
+        "debug_pat_preview": ((AIRTABLE_PAT or "")[:3] + "..." + (AIRTABLE_PAT or "")[-3:]) if len((AIRTABLE_PAT or "")) >= 7 else "(too_short)",
     }
