@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from twilio.rest import Client
 app = FastAPI(title="Huss SMS Service", version="1.0.0")
 
+APP_VERSION = "auth-debug-v1"
+
 AIRTABLE_PAT = os.getenv("AIRTABLE_PAT", "")
 AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID", "")
 AIRTABLE_TABLE_ID = os.getenv("AIRTABLE_TABLE_ID", "")
@@ -126,6 +128,10 @@ def get_client() -> Client:
 @app.get("/health")
 def health():
     return {"ok": True}
+
+@app.get("/version")
+async def version():
+    return {"version": APP_VERSION}
 
 @app.post("/send-intake-sms", response_model=SendSmsResponse)
 def send_intake_sms(payload: SendSmsRequest):
