@@ -100,17 +100,6 @@ def _check_secret(body_secret: str, header_secret: str, request_headers: dict):
             },
         )
 
-def _airtable_patch(record_id: str, fields: dict):
-    if not AIRTABLE_PAT or not AIRTABLE_BASE_ID or not AIRTABLE_TABLE_ID:
-        raise HTTPException(status_code=500, detail="Missing Airtable env vars")
-    
-                "error": "AIRTABLE_HTTP_ERROR",
-                "airtable_status": e.code,
-                "airtable_body": e.read().decode("utf-8"),
-                "pat_len": pat_len,
-                "pat_preview": pat_preview,
-            },
-        )
 
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
