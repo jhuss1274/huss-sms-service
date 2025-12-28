@@ -157,9 +157,5 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
         "category": category,
         "urgency": urgency,
         "missing_info_list": missing,
-        "recommended_route": recommended_route,
-        "debug_record_id": record_id,
-        "debug_airtable_result": airtable_result
-                "debug_pat_len": len(AIRTABLE_PAT or ""),
-        "debug_pat_preview": ((AIRTABLE_PAT or "")[:3] + "..." + (AIRTABLE_PAT or "")[-3:]) if len((AIRTABLE_PAT or "")) >= 7 else "(too_short)",
+        "recommended_route": recommended_route
     }
