@@ -25,10 +25,33 @@ def airtable_headers() -> dict:
 
 async def airtable_patch_record(record_id: str, fields: dict) -> dict:
     url = airtable_record_url(record_id)
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.patch(url, headers=airtable_headers(), json={"fields": fields})
-    return {"attempted_url": url, "status_code": r.status_code, "body": (r.json() if "application/json" in r.headers.get("content-type", "") else r.text)}
 
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.patch(
+                url,
+                headers=airtable_headers(),
+                json={"fields": fields},
+            )
+
+        # Return raw detail for debugging (until Zap 3 is done)
+        content_type = r.headers.get("content-type", "")
+        body = r.json() if "application/json" in content_type else r.text
+
+        return {
+            "attempted_url": url,
+            "status_code": r.status_code,
+            "body": body,
+        }
+
+    except Exception as e:
+        # Keep this simple and NEVER indent weirdly
+        return {
+            "attempted_url": url,
+            "status_code": 0,
+            "error": "AIRTABLE_HTTP_ERROR",
+            "exception": repr(e),
+        }
 def _check_secret(body_secret: str, header_secret: str, request_headers: dict):
     expected = (HUSS_SECRET or "").strip()
 
