@@ -1,4 +1,4 @@
-import os, json, urllib.request, urllib.error
+import os, json, urllib.request, urllib.error, httpx, urllib.parse
 import re
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, Request
@@ -12,6 +12,22 @@ AIRTABLE_PAT = os.getenv("AIRTABLE_PAT", "")
 AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID", "")
 AIRTABLE_TABLE_ID = os.getenv("AIRTABLE_TABLE_ID", "")
 HUSS_SECRET = os.getenv("HUSS_SECRET", "")
+
+# Airtable helper functions
+def airtable_table_path(table: str) -> str:
+    return urllib.parse.quote(table, safe="")
+
+def airtable_record_url(record_id: str) -> str:
+    return f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{airtable_table_path(AIRTABLE_TABLE_ID)}/{record_id}"
+
+def airtable_headers() -> dict:
+    return {"Authorization": f"Bearer {AIRTABLE_PAT}", "Content-Type": "application/json"}
+
+async def airtable_patch_record(record_id: str, fields: dict) -> dict:
+    url = airtable_record_url(record_id)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.patch(url, headers=airtable_headers(), json={"fields": fields})
+    return {"attempted_url": url, "status_code": r.status_code, "body": (r.json() if "application/json" in r.headers.get("content-type", "") else r.text)}
 
 def _check_secret(body_secret: str, header_secret: str, request_headers: dict):
     expected = (HUSS_SECRET or "").strip()
@@ -65,33 +81,6 @@ def _airtable_patch(record_id: str, fields: dict):
     if not AIRTABLE_PAT or not AIRTABLE_BASE_ID or not AIRTABLE_TABLE_ID:
         raise HTTPException(status_code=500, detail="Missing Airtable env vars")
     
-    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}/{record_id}"
-    body = json.dumps({"fields": fields}).encode("utf-8")
-    
-    # Safe PAT debugging
-    pat = (AIRTABLE_PAT or "")
-    pat_len = len(pat)
-    pat_preview = pat[:3] + "..." + pat[-3:] if pat_len >= 7 else "(too_short)"
-    
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="PATCH",
-        headers={
-            "Authorization": f"Bearer {(AIRTABLE_PAT or '').strip()}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            result["_debug_pat_len"] = pat_len
-            result["_debug_pat_preview"] = pat_preview
-            return result
-    except urllib.error.HTTPError as e:
-        raise HTTPException(
-            status_code=502,
-            detail={
                 "error": "AIRTABLE_HTTP_ERROR",
                 "airtable_status": e.code,
                 "airtable_body": e.read().decode("utf-8"),
@@ -217,7 +206,7 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "Status": "Processed",
         "Notes": notes_blob,
     }
-    airtable_result = _airtable_patch(record_id, fields_to_write)
+    patch_result = await airtable_patch_record(record_id, {"SMS Status": "Processed", "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.zap_run_id or ''}"}
     return {
         "summary": summary,
         "category": category,
@@ -226,7 +215,8 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "recommended_route": recommended_route
     }
 
-@app.get("/intake_process")
+@app.get("/intake_process"),
+        "patch_result": patch_result
 async def intake_process_get():
     return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
 
