@@ -159,3 +159,13 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
         "missing_info_list": missing,
         "recommended_route": recommended_route
     }
+
+
+@app.get("/intake_process")
+async def intake_process_get():
+        return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
+
+
+@app.post("/intake_process/")
+async def intake_process_slash(payload: dict, x_huss_secret: str = Header(default="")):
+        return await intake_process(payload, x_huss_secret)
