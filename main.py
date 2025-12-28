@@ -56,6 +56,7 @@ def _airtable_patch(record_id: str, fields: dict):
                                             "pat_len": pat_len,
                                             "pat_preview": pat_preview,
                                         },
+                    )
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "").strip()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
