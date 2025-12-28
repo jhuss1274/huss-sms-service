@@ -1,11 +1,9 @@
 import os, json, urllib.request, urllib.error
 import re
 from typing import Optional
-
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
 from pydantic import BaseModel, Field
 from twilio.rest import Client
-
 app = FastAPI(title="Huss SMS Service", version="1.0.0")
 
 AIRTABLE_PAT = os.getenv("AIRTABLE_PAT", "")
@@ -13,11 +11,53 @@ AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID", "")
 AIRTABLE_TABLE_ID = os.getenv("AIRTABLE_TABLE_ID", "")
 HUSS_SECRET = os.getenv("HUSS_SECRET", "")
 
-def _check_secret(body_secret: str, header_secret: str):
+def _check_secret(body_secret: str, header_secret: str, request_headers: dict):
     expected = (HUSS_SECRET or "").strip()
-    provided = (body_secret or "").strip() or (header_secret or "").strip()
-    if expected and provided != expected:
-        raise HTTPException(status_code=401, detail="unauthorized")
+
+    # Collect possible provided secrets from multiple header spellings + body
+    candidates = []
+
+    if body_secret:
+        candidates.append(("body.secret", str(body_secret)))
+
+    if header_secret:
+        candidates.append(("header.X-Huss-Secret(param)", str(header_secret)))
+
+    # raw headers (case-insensitive in Starlette, but we normalize)
+    for k in ["x-huss-secret", "X-Huss-Secret", "X_HUSS_SECRET", "x_huss_secret"]:
+        v = request_headers.get(k)
+        if v:
+            candidates.append((f"header.{k}", str(v)))
+
+    # choose first non-empty candidate
+    provided_src = None
+    provided_val = ""
+    for src, val in candidates:
+        if (val or "").strip():
+            provided_src = src
+            provided_val = val.strip()
+            break
+
+    if not expected:
+        # If expected is empty, allow (shouldn't happen, but prevents lockout)
+        return
+
+    if provided_val != expected:
+        # Return safe debug info (no secret leak)
+        exp_len = len(expected)
+        got_len = len(provided_val)
+        got_preview = (provided_val[:3] + "..." + provided_val[-3:]) if got_len >= 7 else "(too_short_or_empty)"
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": "unauthorized",
+                "expected_len": exp_len,
+                "got_len": got_len,
+                "got_preview": got_preview,
+                "got_from": provided_src,
+                "headers_seen": sorted(list(request_headers.keys()))[:25],
+            },
+        )
 
 def _airtable_patch(record_id: str, fields: dict):
     if not AIRTABLE_PAT or not AIRTABLE_BASE_ID or not AIRTABLE_TABLE_ID:
@@ -48,15 +88,17 @@ def _airtable_patch(record_id: str, fields: dict):
             return result
     except urllib.error.HTTPError as e:
         raise HTTPException(
-                        status_code=502,
-                        detail={
-                                            "error": "AIRTABLE_HTTP_ERROR",
-                                            "airtable_status": e.code,
-                                            "airtable_body": e.read().decode("utf-8"),
-                                            "pat_len": pat_len,
-                                            "pat_preview": pat_preview,
-                                        },
-                    )
+            status_code=502,
+            detail={
+                "error": "AIRTABLE_HTTP_ERROR",
+                "airtable_status": e.code,
+                "airtable_body": e.read().decode("utf-8"),
+                "pat_len": pat_len,
+                "pat_preview": pat_preview,
+            },
+        )
+
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "").strip()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
@@ -92,7 +134,7 @@ def send_intake_sms(payload: SendSmsRequest):
     if payload.secret != WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized.")
     if not E164_RE.match(payload.phone_e164):
-        raise HTTPException(status_code=400, detail="Invalid phone format.")  
+        raise HTTPException(status_code=400, detail="Invalid phone format.") 
     try:
         client = get_client()
         msg = client.messages.create(
@@ -105,8 +147,9 @@ def send_intake_sms(payload: SendSmsRequest):
         raise HTTPException(status_code=502, detail="Twilio send failed.")
 
 @app.post("/intake_process")
-async def intake_process(payload: dict, x_huss_secret: str = Header(default="")):  # Check for secret in header or body
-    _check_secret(payload.get("secret", ""), x_huss_secret)
+async def intake_process(payload: dict, request: Request, x_huss_secret: str = Header(default="")):
+    # Check for secret in header or body
+    _check_secret(payload.get("secret", ""), x_huss_secret, dict(request.headers))
     
     record_id = (payload.get("airtable_record_id") or "").strip()
     if not record_id:
@@ -160,12 +203,10 @@ async def intake_process(payload: dict, x_huss_secret: str = Header(default=""))
         "recommended_route": recommended_route
     }
 
-
 @app.get("/intake_process")
 async def intake_process_get():
-        return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
-
+    return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
 
 @app.post("/intake_process/")
-async def intake_process_slash(payload: dict, x_huss_secret: str = Header(default="")):
-        return await intake_process(payload, x_huss_secret)
+async def intake_process_slash(payload: dict, request: Request, x_huss_secret: str = Header(default="")):
+    return await intake_process(payload, request, x_huss_secret)
