@@ -233,10 +233,10 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "recommended_route": recommended_route
     }
 
-@app.get("/intake_process"),
+@app.get("/intake_process")
         "patch_result": patch_result
 async def intake_process_get():
-    return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"
+    return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
 @app.post("/intake_process/")
 async def intake_process_slash(payload: dict, request: Request, x_huss_secret: str = Header(default="")):
     return await intake_process(payload, request, x_huss_secret)
