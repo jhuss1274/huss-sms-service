@@ -133,6 +133,23 @@ def health():
 async def version():
     return {"version": APP_VERSION}
 
+@app.get("/airtable_auth_check")
+async def airtable_auth_check():
+    import httpx
+    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}"
+    headers = {"Authorization": f"Bearer {AIRTABLE_PAT}"}
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers, params={"maxRecords": 1})
+            return {
+                "status_code": response.status_code,
+                "response_body": response.json() if response.status_code == 200 else response.text,
+                "headers_sent": {"Authorization": f"Bearer {AIRTABLE_PAT[:8]}..."}
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.post("/send-intake-sms", response_model=SendSmsResponse)
 def send_intake_sms(payload: SendSmsRequest):
     if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_MESSAGING_SERVICE_SID and WEBHOOK_SECRET):
