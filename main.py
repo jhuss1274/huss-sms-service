@@ -234,7 +234,6 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
     }
 
 @app.get("/intake_process")
-        "patch_result": patch_result
 async def intake_process_get():
     return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
 @app.post("/intake_process/")
