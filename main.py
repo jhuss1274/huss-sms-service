@@ -36,7 +36,7 @@ def _airtable_patch(record_id: str, fields: dict):
         data=body,
         method="PATCH",
         headers={
-            "Authorization": f"Bearer {(AIRTABLE_PAT or '').strip()}}",
+            "Authorization": f"Bearer {(AIRTABLE_PAT or '').strip()}",
             "Content-Type": "application/json",
         },
     )
