@@ -1,39 +1,10 @@
-import traceback
 import os, json, urllib.request, urllib.error, httpx, urllib.parse
 import re
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from twilio.rest import Client
 app = FastAPI(title="Huss SMS Service", version="1.0.0")
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # Only return full traceback if correct secret header is present
-    expected = os.getenv("HUSS_SECRET", "")
-    got = request.headers.get("X-Huss-Secret", "")
-
-    if expected and got == expected:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "ok": False,
-                "error": "UNCAUGHT_EXCEPTION",
-                "exception": repr(exc),
-                "traceback": traceback.format_exc(),
-                "path": str(request.url.path),
-            },
-        )
-
-    # Generic response for all other callers (do not leak internals)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "ok": False,
-            "error": "INTERNAL_SERVER_ERROR",
-        },
-    )
 
 APP_VERSION = "auth-debug-v1"
 
@@ -247,35 +218,23 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "Status": "Processed",
         "Notes": notes_blob,
     }
-        recotry:
-        patch_result = await airtable_patch_record(
-            record_id,
-            {
-                "SMS Status": "Processed",
-                "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.get('zap_run_id') or ''}",
-            },
-        )
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "ok": False,
-                "error": "AIRTABLE_PATCH_CRASH",
-                "exception": repr(e),
-                "traceback": traceback.format_exc(),
-                "airtable_record_id": payload.get("airtable_record_id"),
-                "zap_run_id": payload.get("zap_run_id"),
-            },
-        )
+    patch_result = await airtable_patch_record(
+        record_id,
+        {
+            "SMS Status": "Processed",
+            "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.zap_run_id or ''}",
+        },
+    )
     return {
         "summary": summary,
         "category": category,
         "urgency": urgency,
         "missing_info_list": missing,
-        "recommended_route": recommended_route,
-        "patch_result": patch_result,
+        "recommended_route": recommended_route
+    }
 
 @app.get("/intake_process")
+        "patch_result": patch_result
 async def intake_process_get():
     return {"ok": False, "error": "METHOD_NOT_ALLOWED", "message": "Use POST to /intake_process"}
 @app.post("/intake_process/")
