@@ -8,6 +8,33 @@ from pydantic import BaseModel, Field
 from twilio.rest import Client
 app = FastAPI(title="Huss SMS Service", version="1.0.0")
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Only return full traceback if correct secret header is present
+    expected = os.getenv("HUSS_SECRET", "")
+    got = request.headers.get("X-Huss-Secret", "")
+
+    if expected and got == expected:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "UNCAUGHT_EXCEPTION",
+                "exception": repr(exc),
+                "traceback": traceback.format_exc(),
+                "path": str(request.url.path),
+            },
+        )
+
+    # Generic response for all other callers (do not leak internals)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "ok": False,
+            "error": "INTERNAL_SERVER_ERROR",
+        },
+    )
+
 APP_VERSION = "auth-debug-v1"
 
 AIRTABLE_PAT = os.getenv("AIRTABLE_PAT", "")
