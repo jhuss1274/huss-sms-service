@@ -1,7 +1,9 @@
-import os, json, urllib.request, urllib.error, httpx, urllib.parse
+impoimport traceback
+rt os, json, urllib.request, urllib.error, httpx, urllib.parse
 import re
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from twilio.rest import Client
 app = FastAPI(title="Huss SMS Service", version="1.0.0")
@@ -218,20 +220,33 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "Status": "Processed",
         "Notes": notes_blob,
     }
-    patch_result = await airtable_patch_record(
-        record_id,
-        {
-            "SMS Status": "Processed",
-            "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.zap_run_id or ''}",
-        },
-    )
+        recotry:
+        patch_result = await airtable_patch_record(
+            record_id,
+            {
+                "SMS Status": "Processed",
+                "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.get('zap_run_id') or ''}",
+            },
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "AIRTABLE_PATCH_CRASH",
+                "exception": repr(e),
+                "traceback": traceback.format_exc(),
+                "airtable_record_id": payload.get("airtable_record_id"),
+                "zap_run_id": payload.get("zap_run_id"),
+            },
+        )
     return {
         "summary": summary,
         "category": category,
         "urgency": urgency,
         "missing_info_list": missing,
-        "recommended_route": recommended_route
-    }
+        "recommended_route": recommended_route,
+        "patch_result": patch_result,
 
 @app.get("/intake_process")
 async def intake_process_get():
