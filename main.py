@@ -175,8 +175,8 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
     # Check for secret in header or body
     _check_secret(payload.get("secret", ""), x_huss_secret, dict(request.headers))
     
-    record_id = (payload.get("airtable_record_id") or payload.get("record_id") or payload.get("airtableRecordId") or "").strip()    if not record_id:
-        raise HTTPException(status_code=400, detail="missing airtable_record_id")
+    record_id = (payload.get("airtable_record_id") or payload.get("record_id") or payload.get("airtableRecordId") or "").strip()
+        if not record_id:raise HTTPException(status_code=400, detail="missing airtable_record_id")
     
     # Extract fields
     airtable_record_id = payload.get("airtable_record_id", "")
@@ -233,10 +233,10 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
     )
 
         # Capture status
-        airtable_patch_status = getattr(patch_result, "status_code", None) or getattr(patch_result, "status", None)
+        airtable_patch_status = getattr(patch_result, "status_code", None) or getattr(patch_result, "status", None)        airtable_patch_ok = airtable_patch_status in (200, 204)
         airtable_patch_ok = airtable_patch_status in (200, 204)
-
-    except Exception as e:
+    
+    except Exception as e:        
         airtable_patch_error = str(e)
     return {
         "summary": summary,
