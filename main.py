@@ -175,8 +175,7 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
     # Check for secret in header or body
     _check_secret(payload.get("secret", ""), x_huss_secret, dict(request.headers))
     
-    record_id = (payload.get("airtable_record_id") or "").strip()
-    if not record_id:
+    record_id = (payload.get("airtable_record_id") or payload.get("record_id") or payload.get("airtableRecordId") or "").strip()    if not record_id:
         raise HTTPException(status_code=400, detail="missing airtable_record_id")
     
     # Extract fields
@@ -218,19 +217,39 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "Status": "Processed",
         "Notes": notes_blob,
     }
-    patch_result = await airtable_patch_record(
-        record_id,
-        {
-            "SMS Status": "Processed",
-            "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.get('zap_run_id') or ''}",
-        },
+
+    # Capture Airtable PATCH result for verification
+    airtable_patch_ok = False
+    airtable_patch_status = None
+    airtable_patch_error = None
+
+    try:
+        patch_result = await airtable_patch_record(
+            record_id,
+            {
+                "SMS Status": "Processed",
+                "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.get('zap_run_id') or ''}",
+            },
     )
+
+        # Capture status
+        airtable_patch_status = getattr(patch_result, "status_code", None) or getattr(patch_result, "status", None)
+        airtable_patch_ok = airtable_patch_status in (200, 204)
+
+    except Exception as e:
+        airtable_patch_error = str(e)
     return {
         "summary": summary,
         "category": category,
         "urgency": urgency,
         "missing_info_list": missing,
-        "recommended_route": recommended_route
+        "recommended_route": recommended_route,
+
+        # Airtable PATCH verification
+        "airtable_record_id_used": record_id,
+        "airtable_patch_ok": airtable_patch_ok,
+        "airtable_patch_status": airtable_patch_status,
+        "airtable_patch_error": airtable_patch_error
     }
 
 @app.get("/intake_process")
