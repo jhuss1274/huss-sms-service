@@ -218,7 +218,7 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "Status": "Processed",
         "Notes": notes_blob,
     }
-        zap_run_id = payload.get("zap_run_id") or ""
+            zap_run_id = payload.get("zap_run_id") or ""
     patch_result = await airtable_patch_record(
         record_id,
         {
