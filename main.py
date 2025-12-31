@@ -218,12 +218,11 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: str = H
         "Status": "Processed",
         "Notes": notes_blob,
     }
-            zap_run_id = payload.get("zap_run_id") or ""
     patch_result = await airtable_patch_record(
         record_id,
         {
             "SMS Status": "Processed",
-            "Notes": f"V12.5_Zap3 OK | zap_run_id={zap_run_id or ''}",
+            "Notes": f"V12.5_Zap3 OK | zap_run_id={payload.get('zap_run_id') or ''}",
         },
     )
     return {
