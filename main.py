@@ -203,11 +203,10 @@ async def intake_process(payload: dict, request: Request, x_huss_secret: Optiona
     summary = raw_intake_text if raw_intake_text else "No transcript available."
     recommended_route = "Jeremy"
 
-    # Patch Airtable — THIS is the Zap 3 ledger write
+    # === FIXED: Patch ONLY Notes (prevents Airtable 422) ===
     patch_result = await airtable_patch_record(
         record_id,
         {
-            "SMS Status": "Processed",
             "Notes": f"V12.5_Zap3 OK | zap_run_id={(payload.get('zap_run_id') or '')}",
         },
     )
